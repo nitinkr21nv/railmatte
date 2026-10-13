@@ -1,15 +1,24 @@
 import express from 'express';
-import { isSupabaseLive } from '../services/store.js';
+import { isSupabaseLive, getDatabaseStatus } from '../services/store.js';
 
 const router = express.Router();
 
 router.get('/', (req, res) => {
+  const dbStatus = getDatabaseStatus();
   res.json({
     status: 'healthy',
     service: 'RailMatte API Server',
     version: '1.0.0',
     tagline: 'Swap seats. Travel better.',
     storageMode: isSupabaseLive ? 'supabase_postgresql' : 'in_memory_store',
+    database: {
+      configured: dbStatus.configured,
+      operational: dbStatus.operational,
+      mode: dbStatus.mode,
+      error: dbStatus.error || null,
+      code: dbStatus.code || null,
+      hint: dbStatus.hint || null
+    },
     monadConfig: {
       chainId: Number(process.env.MONAD_CHAIN_ID || 10143),
       rpcUrl: process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz',

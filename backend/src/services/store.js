@@ -1,26 +1,122 @@
+import '../config/env.js';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
-// Determine if live Supabase is configured
-const hasSupabase = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-export const isSupabaseLive = hasSupabase;
+// Determine if Supabase credentials are configured in environment
+export const isSupabaseConfigured = Boolean(
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-let supabase = null;
-if (hasSupabase) {
+// Never print or leak credential values in logs
+function logDbError(operation, error) {
+  const code = error?.code ? ` (Code: ${error.code})` : '';
+  const hint = error?.hint ? ` - Hint: ${error.hint}` : '';
+  console.error(`[RailMatte DB Error] ${operation} failed: ${error?.message || error}${code}${hint}`);
+}
+
+// Client instance
+export let supabase = null;
+let isOperational = false;
+export let isSupabaseLive = false;
+let lastHealthCheck = null;
+
+if (isSupabaseConfigured) {
   try {
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-    console.log('[RailMatte DB] Connected to Supabase PostgreSQL');
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
   } catch (err) {
-    console.warn('[RailMatte DB] Supabase initialization failed, falling back to memory store:', err.message);
+    console.warn('[RailMatte DB] Supabase initialization failed:', err.message);
   }
-} else {
-  console.log('[RailMatte DB] Running in Memory Datastore mode (No external Supabase credentials required for local testing)');
+}
+
+/**
+ * Perform a live health check against the Supabase database.
+ * Tests actual table readability without leaking credentials.
+ */
+export async function checkDatabaseHealth() {
+  if (!isSupabaseConfigured || !supabase) {
+    isOperational = false;
+    isSupabaseLive = false;
+    lastHealthCheck = {
+      configured: false,
+      operational: false,
+      mode: 'memory',
+      message: 'Supabase PostgreSQL not configured in .env -> Using robust in-memory datastore'
+    };
+    return lastHealthCheck;
+  }
+
+  try {
+    let host = 'configured';
+    try {
+      host = new URL(process.env.SUPABASE_URL).hostname;
+    } catch {}
+
+    const { data, error } = await supabase.from('profiles').select('id').limit(1);
+
+    if (error) {
+      isOperational = false;
+      isSupabaseLive = false;
+      lastHealthCheck = {
+        configured: true,
+        operational: false,
+        mode: 'memory_fallback',
+        host,
+        error: error.message,
+        code: error.code || null,
+        hint: error.hint || null
+      };
+      return lastHealthCheck;
+    }
+
+    isOperational = true;
+    isSupabaseLive = true;
+    lastHealthCheck = {
+      configured: true,
+      operational: true,
+      mode: 'supabase',
+      host,
+      verified: true
+    };
+    return lastHealthCheck;
+  } catch (err) {
+    isOperational = false;
+    isSupabaseLive = false;
+    lastHealthCheck = {
+      configured: true,
+      operational: false,
+      mode: 'memory_fallback',
+      error: err.message,
+      code: err.code || null
+    };
+    return lastHealthCheck;
+  }
+}
+
+export function getDatabaseStatus() {
+  return (
+    lastHealthCheck || {
+      configured: isSupabaseConfigured,
+      operational: isOperational,
+      mode: isOperational ? 'supabase' : isSupabaseConfigured ? 'memory_fallback' : 'memory'
+    }
+  );
+}
+
+// Allow explicit override for tests
+export function setOperationalState(state) {
+  isOperational = Boolean(state);
+  isSupabaseLive = Boolean(state);
 }
 
 // ============================================================================
 // IN-MEMORY DATA STORE (Zero-friction local dev & test fallback)
 // ============================================================================
-const memoryStore = {
+export const memoryStore = {
   profiles: new Map([
     [
       'user-priya-001',
@@ -29,7 +125,8 @@ const memoryStore = {
         email: 'priya.sharma@example.com',
         display_name: 'Priya Sharma',
         wallet_address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-        created_at: new Date(Date.now() - 86400000 * 2).toISOString()
+        created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+        updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
       }
     ],
     [
@@ -39,7 +136,8 @@ const memoryStore = {
         email: 'rahul.verma@example.com',
         display_name: 'Rahul Verma',
         wallet_address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-        created_at: new Date(Date.now() - 86400000 * 2).toISOString()
+        created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+        updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
       }
     ],
     [
@@ -49,7 +147,8 @@ const memoryStore = {
         email: 'ananya.iyer@example.com',
         display_name: 'Ananya Iyer',
         wallet_address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-        created_at: new Date(Date.now() - 86400000 * 1).toISOString()
+        created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+        updated_at: new Date(Date.now() - 86400000 * 1).toISOString()
       }
     ]
   ]),
@@ -125,40 +224,76 @@ const memoryStore = {
   assistanceReports: new Map()
 };
 
+// Auto-seed helper for freshly granted Supabase tables
+async function seedDefaultDataIfEmpty() {
+  if (!isOperational || !supabase) return;
+
+  try {
+    const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+    if (count === 0) {
+      const demoUsers = Array.from(memoryStore.profiles.values());
+      await supabase.from('profiles').insert(demoUsers);
+
+      const demoRequests = Array.from(memoryStore.requests.values());
+      await supabase.from('exchange_requests').insert(demoRequests);
+    }
+  } catch (err) {
+    logDbError('seedDefaultDataIfEmpty', err);
+  }
+}
+
 // ============================================================================
 // STORE INTERFACE IMPLEMENTATION
+// Uses Supabase PostgreSQL when operational, or robust in-memory datastore
 // ============================================================================
 
 export const store = {
   // --- USERS & PROFILES ---
   async getUser(id) {
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data;
+      if (error) {
+        logDbError(`getUser(${id})`, error);
+        throw new Error(`Database error retrieving user: ${error.message}`);
+      }
+      return data || null;
     }
     return memoryStore.profiles.get(id) || null;
   },
 
   async getAllUsers() {
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('profiles').select('*');
-      if (!error && data) return data;
+      if (error) {
+        logDbError('getAllUsers', error);
+        throw new Error(`Database error listing users: ${error.message}`);
+      }
+      if (!data || data.length === 0) {
+        await seedDefaultDataIfEmpty();
+        const { data: refetched } = await supabase.from('profiles').select('*');
+        return refetched || [];
+      }
+      return data;
     }
     return Array.from(memoryStore.profiles.values());
   },
 
   async createOrUpdateUser({ id, email, display_name, wallet_address }) {
     const record = {
-      id: id || `user-${crypto.randomUUID().slice(0, 8)}`,
+      id: id || crypto.randomUUID(),
       email: email || `${id || 'user'}@railmatte.local`,
       display_name: display_name || 'Passenger',
       wallet_address: wallet_address || null,
       updated_at: new Date().toISOString()
     };
 
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('profiles').upsert(record).select().single();
-      if (!error && data) return data;
+      if (error) {
+        logDbError('createOrUpdateUser', error);
+        throw new Error(`Database error saving profile: ${error.message}`);
+      }
+      return data;
     }
 
     const existing = memoryStore.profiles.get(record.id);
@@ -169,19 +304,27 @@ export const store = {
 
   // --- EXCHANGE REQUESTS ---
   async getAllRequests({ status, userId } = {}) {
-    if (supabase) {
+    if (isOperational && supabase) {
       let query = supabase.from('exchange_requests').select('*, profiles(id, display_name, email)');
       if (status) query = query.eq('status', status);
       if (userId) query = query.eq('user_id', userId);
       const { data, error } = await query;
-      if (!error && data) return data;
+      if (error) {
+        logDbError('getAllRequests', error);
+        throw new Error(`Database error listing requests: ${error.message}`);
+      }
+      if ((!data || data.length === 0) && !status && !userId) {
+        await seedDefaultDataIfEmpty();
+        const { data: refetched } = await query;
+        return refetched || [];
+      }
+      return data || [];
     }
 
     let results = Array.from(memoryStore.requests.values());
     if (status) results = results.filter((r) => r.status === status);
     if (userId) results = results.filter((r) => r.user_id === userId);
 
-    // Attach profile snippet
     return results.map((r) => {
       const prof = memoryStore.profiles.get(r.user_id);
       return {
@@ -192,9 +335,17 @@ export const store = {
   },
 
   async getRequestById(id) {
-    if (supabase) {
-      const { data, error } = await supabase.from('exchange_requests').select('*, profiles(id, display_name, email)').eq('id', id).maybeSingle();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('exchange_requests')
+        .select('*, profiles(id, display_name, email)')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) {
+        logDbError(`getRequestById(${id})`, error);
+        throw new Error(`Database error fetching request: ${error.message}`);
+      }
+      return data || null;
     }
 
     const req = memoryStore.requests.get(id);
@@ -207,7 +358,7 @@ export const store = {
   },
 
   async createRequest(data) {
-    const id = data.id || `req-${crypto.randomUUID().slice(0, 8)}`;
+    const id = data.id || crypto.randomUUID();
     const now = new Date().toISOString();
     const record = {
       id,
@@ -228,9 +379,23 @@ export const store = {
       updated_at: now
     };
 
-    if (supabase) {
+    if (isOperational && supabase) {
+      // Ensure user profile exists to satisfy foreign key constraint
+      const existingUser = await this.getUser(data.user_id);
+      if (!existingUser) {
+        await this.createOrUpdateUser({
+          id: data.user_id,
+          email: `${data.user_id}@passenger.railmatte.local`,
+          display_name: `Passenger ${data.user_id.slice(0, 6)}`
+        });
+      }
+
       const { data: dbData, error } = await supabase.from('exchange_requests').insert(record).select().single();
-      if (!error && dbData) return dbData;
+      if (error) {
+        logDbError('createRequest', error);
+        throw new Error(`Database error creating exchange request: ${error.message}`);
+      }
+      return dbData;
     }
 
     memoryStore.requests.set(id, record);
@@ -239,9 +404,18 @@ export const store = {
 
   async updateRequest(id, updates) {
     const now = new Date().toISOString();
-    if (supabase) {
-      const { data, error } = await supabase.from('exchange_requests').update({ ...updates, updated_at: now }).eq('id', id).select().single();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('exchange_requests')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) {
+        logDbError(`updateRequest(${id})`, error);
+        throw new Error(`Database error updating request: ${error.message}`);
+      }
+      return data;
     }
 
     const existing = memoryStore.requests.get(id);
@@ -253,12 +427,16 @@ export const store = {
 
   // --- PROPOSALS (BILATERAL MUTUAL CONSENT) ---
   async getProposals({ userId, status } = {}) {
-    if (supabase) {
+    if (isOperational && supabase) {
       let query = supabase.from('exchange_proposals').select('*');
       if (status) query = query.eq('status', status);
       if (userId) query = query.or(`proposer_id.eq.${userId},recipient_id.eq.${userId}`);
       const { data, error } = await query;
-      if (!error && data) return data;
+      if (error) {
+        logDbError('getProposals', error);
+        throw new Error(`Database error retrieving proposals: ${error.message}`);
+      }
+      return data || [];
     }
 
     let list = Array.from(memoryStore.proposals.values());
@@ -272,15 +450,19 @@ export const store = {
   },
 
   async getProposalById(id) {
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('exchange_proposals').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data;
+      if (error) {
+        logDbError(`getProposalById(${id})`, error);
+        throw new Error(`Database error fetching proposal: ${error.message}`);
+      }
+      return data || null;
     }
     return memoryStore.proposals.get(id) || null;
   },
 
   async createProposal({ request_a_id, request_b_id, proposer_id, recipient_id }) {
-    const id = `prop-${crypto.randomUUID().slice(0, 8)}`;
+    const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const proposal = {
       id,
@@ -297,9 +479,13 @@ export const store = {
       updated_at: now
     };
 
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('exchange_proposals').insert(proposal).select().single();
-      if (!error && data) return data;
+      if (error) {
+        logDbError('createProposal', error);
+        throw new Error(`Database error creating proposal: ${error.message}`);
+      }
+      return data;
     }
 
     memoryStore.proposals.set(id, proposal);
@@ -308,9 +494,18 @@ export const store = {
 
   async updateProposal(id, updates) {
     const now = new Date().toISOString();
-    if (supabase) {
-      const { data, error } = await supabase.from('exchange_proposals').update({ ...updates, updated_at: now }).eq('id', id).select().single();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('exchange_proposals')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) {
+        logDbError(`updateProposal(${id})`, error);
+        throw new Error(`Database error updating proposal: ${error.message}`);
+      }
+      return data;
     }
 
     const existing = memoryStore.proposals.get(id);
@@ -322,15 +517,23 @@ export const store = {
 
   // --- AGREEMENT COMMITMENTS (BLOCKCHAIN TRUST ANCHORS) ---
   async getCommitmentByProposalId(proposalId) {
-    if (supabase) {
-      const { data, error } = await supabase.from('agreement_commitments').select('*').eq('proposal_id', proposalId).maybeSingle();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('agreement_commitments')
+        .select('*')
+        .eq('proposal_id', proposalId)
+        .maybeSingle();
+      if (error) {
+        logDbError(`getCommitmentByProposalId(${proposalId})`, error);
+        throw new Error(`Database error fetching commitment: ${error.message}`);
+      }
+      return data || null;
     }
     return memoryStore.commitments.get(proposalId) || null;
   },
 
   async saveCommitment(data) {
-    const id = data.id || `comm-${crypto.randomUUID().slice(0, 8)}`;
+    const id = data.id || crypto.randomUUID();
     const record = {
       id,
       proposal_id: data.proposal_id,
@@ -346,9 +549,13 @@ export const store = {
       created_at: new Date().toISOString()
     };
 
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data: dbData, error } = await supabase.from('agreement_commitments').upsert(record).select().single();
-      if (!error && dbData) return dbData;
+      if (error) {
+        logDbError('saveCommitment', error);
+        throw new Error(`Database error saving agreement commitment: ${error.message}`);
+      }
+      return dbData;
     }
 
     memoryStore.commitments.set(data.proposal_id, record);
@@ -356,9 +563,18 @@ export const store = {
   },
 
   async updateCommitment(proposalId, updates) {
-    if (supabase) {
-      const { data, error } = await supabase.from('agreement_commitments').update(updates).eq('proposal_id', proposalId).select().single();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('agreement_commitments')
+        .update(updates)
+        .eq('proposal_id', proposalId)
+        .select()
+        .single();
+      if (error) {
+        logDbError(`updateCommitment(${proposalId})`, error);
+        throw new Error(`Database error updating commitment: ${error.message}`);
+      }
+      return data;
     }
 
     const existing = memoryStore.commitments.get(proposalId);
@@ -370,11 +586,15 @@ export const store = {
 
   // --- ASSISTANCE REPORTS ---
   async getAssistanceReports({ userId } = {}) {
-    if (supabase) {
+    if (isOperational && supabase) {
       let query = supabase.from('assistance_reports').select('*');
       if (userId) query = query.eq('user_id', userId);
       const { data, error } = await query;
-      if (!error && data) return data;
+      if (error) {
+        logDbError('getAssistanceReports', error);
+        throw new Error(`Database error listing assistance reports: ${error.message}`);
+      }
+      return data || [];
     }
 
     let list = Array.from(memoryStore.assistanceReports.values());
@@ -383,15 +603,19 @@ export const store = {
   },
 
   async getAssistanceReportById(id) {
-    if (supabase) {
+    if (isOperational && supabase) {
       const { data, error } = await supabase.from('assistance_reports').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data;
+      if (error) {
+        logDbError(`getAssistanceReportById(${id})`, error);
+        throw new Error(`Database error fetching assistance report: ${error.message}`);
+      }
+      return data || null;
     }
     return memoryStore.assistanceReports.get(id) || null;
   },
 
   async createAssistanceReport(data) {
-    const id = `rep-${crypto.randomUUID().slice(0, 8)}`;
+    const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const report = {
       id,
@@ -404,9 +628,22 @@ export const store = {
       updated_at: now
     };
 
-    if (supabase) {
+    if (isOperational && supabase) {
+      const existingUser = await this.getUser(data.user_id);
+      if (!existingUser) {
+        await this.createOrUpdateUser({
+          id: data.user_id,
+          email: `${data.user_id}@passenger.railmatte.local`,
+          display_name: `Passenger ${data.user_id.slice(0, 6)}`
+        });
+      }
+
       const { data: dbData, error } = await supabase.from('assistance_reports').insert(report).select().single();
-      if (!error && dbData) return dbData;
+      if (error) {
+        logDbError('createAssistanceReport', error);
+        throw new Error(`Database error creating assistance report: ${error.message}`);
+      }
+      return dbData;
     }
 
     memoryStore.assistanceReports.set(id, report);
@@ -415,9 +652,18 @@ export const store = {
 
   async updateAssistanceReport(id, updates) {
     const now = new Date().toISOString();
-    if (supabase) {
-      const { data, error } = await supabase.from('assistance_reports').update({ ...updates, updated_at: now }).eq('id', id).select().single();
-      if (!error && data) return data;
+    if (isOperational && supabase) {
+      const { data, error } = await supabase
+        .from('assistance_reports')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) {
+        logDbError(`updateAssistanceReport(${id})`, error);
+        throw new Error(`Database error updating assistance report: ${error.message}`);
+      }
+      return data;
     }
 
     const existing = memoryStore.assistanceReports.get(id);
