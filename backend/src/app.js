@@ -11,21 +11,28 @@ import { errorHandler } from './middleware/errorHandler.js';
 export function createApp() {
   const app = express();
 
-  // Security: CORS configuration
-  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+  // CORS configuration
+  const allowedOrigins = [
+    'https://railmatte-frontend.onrender.com',
+    'http://localhost:5173',
+  ];
+
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, curl, server-to-server) or matching origin
-        if (!origin || origin === allowedOrigin || origin.startsWith('http://localhost:')) {
-          callback(null, true);
-        } else {
-          callback(null, true); // Permissive in dev, can restrict in production
+        if (
+          !origin ||
+          allowedOrigins.includes(origin) ||
+          origin.startsWith('http://localhost:')
+        ) {
+          return callback(null, true);
         }
+
+        return callback(new Error(`CORS blocked origin: ${origin}`));
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
     })
   );
 
