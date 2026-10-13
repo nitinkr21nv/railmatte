@@ -1,27 +1,40 @@
-const { ethers } = require("hardhat");
+
+const { ethers, network } = require("hardhat");
 
 async function main() {
-  console.log("Starting deployment of RailMatteAgreementRegistry...");
+  console.log("Starting RailMatte contract deployment...");
 
-  const [deployer] = await ethers.getSigners();
-  if (deployer) {
-    console.log(`Deploying with account: ${deployer.address}`);
-    const balance = await ethers.provider.getBalance(deployer.address);
-    console.log(`Account balance: ${ethers.formatEther(balance)} MON`);
-  } else {
-    console.log("No signer available. Verify DEPLOYER_PRIVATE_KEY configuration.");
+  const chain = await ethers.provider.getNetwork();
+
+  if (Number(chain.chainId) !== 10143) {
+    throw new Error(`Wrong network: expected Monad Testnet 10143, got ${chain.chainId}`);
   }
 
-  const RegistryFactory = await ethers.getContractFactory("RailMatteAgreementRegistry");
-  const registry = await RegistryFactory.deploy();
-  await registry.waitForDeployment();
+  const [deployer] = await ethers.getSigners();
 
-  const contractAddress = await registry.getAddress();
-  console.log("\n========================================================");
-  console.log(`RailMatteAgreementRegistry successfully deployed!`);
-  console.log(`Contract Address: ${contractAddress}`);
-  console.log(`Network: ${network.name} (Chain ID: ${network.config.chainId})`);
-  console.log("========================================================\n");
+  if (!deployer) {
+    throw new Error("No deployer found. Check DEPLOYER_PRIVATE_KEY.");
+  }
+
+  const balance = await ethers.provider.getBalance(deployer.address);
+
+  console.log("Network:", network.name);
+  console.log("Chain ID:", chain.chainId.toString());
+  console.log("Deployer:", deployer.address);
+  console.log("Balance:", ethers.formatEther(balance), "MON");
+
+  if (balance === 0n) {
+    throw new Error("Wallet has no MON testnet funds.");
+  }
+
+  const Factory = await ethers.getContractFactory("RailMatteAgreementRegistry");
+  const contract = await Factory.deploy();
+
+  console.log("Transaction:", contract.deploymentTransaction().hash);
+
+  await contract.waitForDeployment();
+
+  console.log("Contract deployed at:", await contract.getAddress());
 }
 
 main().catch((error) => {
