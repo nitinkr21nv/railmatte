@@ -350,11 +350,11 @@ export default function SeatExchangePage() {
 
       {/* CREATE REQUEST MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-5 my-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Create Seat Exchange Request</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900">Create Seat Exchange Request</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Privacy-first voluntary coordination. No PNR required.
                 </p>
@@ -362,7 +362,8 @@ export default function SeatExchangePage() {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Close dialog"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -451,7 +452,7 @@ export default function SeatExchangePage() {
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
                 <div className="font-semibold text-slate-800 text-xs">Current Berth Assignment</div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-[11px] text-slate-500 mb-1">Coach *</label>
                     <input
@@ -542,22 +543,23 @@ export default function SeatExchangePage() {
 
       {/* MATCH EVALUATION MODAL / DRAWER */}
       {matchingRequestId && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-4 sm:p-6 shadow-2xl space-y-5 my-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2 text-teal-600 font-bold text-xs uppercase tracking-wider">
                   <Sparkles className="w-4 h-4" />
                   Deterministic Compatibility Engine
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mt-1">
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">
                   Compatible Exchange Matches
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setMatchingRequestId(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Close matches dialog"
               >
                 <X className="w-5 h-5" />
               </button>

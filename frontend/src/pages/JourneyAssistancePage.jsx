@@ -156,19 +156,19 @@ export default function JourneyAssistancePage() {
               <p className="text-[11px] text-slate-500">
                 Type rough notes below and our AI assistant will format a structured, objective report draft and classify the issue.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   placeholder="e.g. Fellow passenger refuses to vacate lower berth allocated on ticket"
                   value={aiNote}
                   onChange={(e) => setAiNote(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white"
+                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white min-h-[40px]"
                 />
                 <button
                   type="button"
                   disabled={aiLoading || !aiNote.trim()}
                   onClick={handleGenerateAiDraft}
-                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 shrink-0"
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 shrink-0 min-h-[40px]"
                 >
                   {aiLoading ? 'Drafting...' : 'Generate Draft'}
                 </button>

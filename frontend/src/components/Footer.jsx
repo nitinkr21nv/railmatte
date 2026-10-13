@@ -1,15 +1,16 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Logo from './Logo';
 import { ShieldCheck, Lock, ExternalLink, GitFork } from 'lucide-react';
 
 export default function Footer() {
   return (
-    <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-12 px-4 sm:px-6 lg:px-8 mt-auto">
+    <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-10 px-4 sm:px-6 lg:px-8 mt-auto">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         {/* Brand column */}
-        <div className="md:col-span-2 space-y-4">
+        <div className="md:col-span-2 space-y-3.5">
           <Logo light={true} />
-          <p className="text-sm text-slate-300 max-w-md leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
             A voluntary train seat-exchange coordinator and journey companion. Enabling passengers to discover mutually agreeable seat adjustments through explicit bilateral consent and privacy-preserving trust anchoring on Monad.
           </p>
           <div className="flex items-center gap-4 text-xs text-slate-400">
@@ -27,21 +28,21 @@ export default function Footer() {
         {/* Product Navigation */}
         <div className="space-y-3">
           <h3 className="text-xs font-semibold text-white uppercase tracking-wider">Product</h3>
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-2 text-xs sm:text-sm">
             <li>
-              <a href="/exchanges" className="hover:text-white transition-colors">
+              <Link to="/exchanges" className="hover:text-white transition-colors">
                 Seat Exchanges
-              </a>
+              </Link>
             </li>
             <li>
-              <a href="/dashboard" className="hover:text-white transition-colors">
+              <Link to="/dashboard" className="hover:text-white transition-colors">
                 Passenger Dashboard
-              </a>
+              </Link>
             </li>
             <li>
-              <a href="/assistance" className="hover:text-white transition-colors">
+              <Link to="/assistance" className="hover:text-white transition-colors">
                 Journey Assistance
-              </a>
+              </Link>
             </li>
             <li>
               <a 
