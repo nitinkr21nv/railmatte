@@ -232,6 +232,7 @@ router.post('/:id/accept', requireAuth, async (req, res, next) => {
       salt_nonce: commitmentData.saltNonce,
       terms_digest: commitmentData.termsDigest,
       chain_id: Number(process.env.MONAD_CHAIN_ID || 10143),
+      contract_address: process.env.MONAD_CONTRACT_ADDRESS || '0xefA55c69cbB76D9a625Cb820D6306bC9152a7e38',
       status: 'PREPARED'
     });
 

@@ -35,10 +35,11 @@ export default function ExchangeDetailPage() {
   const [txSuccess, setTxSuccess] = useState(null);
 
   const contractAddress =
+    proposal?.commitment?.contract_address ||
     import.meta.env.VITE_CONTRACT_ADDRESS ||
-    '0x0000000000000000000000000000000000000000';
+    '0xefA55c69cbB76D9a625Cb820D6306bC9152a7e38';
   const isContractConfigured =
-    contractAddress &&
+    Boolean(contractAddress) &&
     contractAddress !== '0x0000000000000000000000000000000000000000' &&
     /^0x[0-9a-fA-F]{40}$/.test(contractAddress);
 

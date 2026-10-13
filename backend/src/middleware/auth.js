@@ -36,6 +36,10 @@ function normalizeUserId(id) {
 }
 
 function getDisplayName(id) {
+  const lower = id.toLowerCase();
+  if (lower.includes('priya')) return 'Priya Sharma';
+  if (lower.includes('rahul')) return 'Rahul Verma';
+  if (lower.includes('ananya')) return 'Ananya Iyer';
   const match = id.match(/^user-([a-z]+)-/i);
 
   return match

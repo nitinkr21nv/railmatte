@@ -173,6 +173,17 @@ class ApiClient {
       body: JSON.stringify({ note }),
     });
   }
+
+  // Railway Reference Data
+  getRailwayStations(q = '') {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+    return this.request(`/railway/stations${qs}`);
+  }
+
+  getRailwayTrains(q = '') {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+    return this.request(`/railway/trains${qs}`);
+  }
 }
 
 export const api = new ApiClient();

@@ -37,6 +37,7 @@ export default function JourneyAssistancePage() {
   const [aiNote, setAiNote] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDraftReceived, setAiDraftReceived] = useState(null);
+  const [aiError, setAiError] = useState(null);
 
   const loadReports = useCallback(async () => {
     try {
@@ -59,6 +60,7 @@ export default function JourneyAssistancePage() {
     if (!aiNote.trim()) return;
     try {
       setAiLoading(true);
+      setAiError(null);
       const res = await api.generateAiDraft(aiNote.trim());
       if (res.draft) {
         setAiDraftReceived(res.draft);
@@ -66,7 +68,7 @@ export default function JourneyAssistancePage() {
         setDescription(res.draft.description);
       }
     } catch (err) {
-      alert(`AI Draft helper: ${err.message}`);
+      setAiError(err.message || 'Could not draft assistance report. Please enter description manually.');
     } finally {
       setAiLoading(false);
     }
@@ -174,15 +176,31 @@ export default function JourneyAssistancePage() {
                 </button>
               </div>
 
+              {aiError && (
+                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{aiError}</span>
+                </div>
+              )}
+
               {aiDraftReceived && (
                 <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 text-xs space-y-1">
                   <div className="font-semibold text-teal-900 flex items-center gap-1.5 text-[11px]">
                     <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                    AI Suggestion Applied to Form Below:
+                    <span>
+                      {aiDraftReceived.aiGenerated
+                        ? 'Gemini AI Structured Draft Applied Below:'
+                        : 'Local Rule-Based Heuristic Applied (AI Fallback):'}
+                    </span>
                   </div>
                   <div className="text-teal-800 text-[11px]">
                     <strong>Recommended Action:</strong> {aiDraftReceived.recommendedAction}
                   </div>
+                  {aiDraftReceived.modelUsed && (
+                    <div className="text-[10px] text-teal-600">
+                      Model: {aiDraftReceived.modelUsed}
+                    </div>
+                  )}
                   <div className="text-[10px] text-slate-500 italic">
                     Review and edit the fields below before submitting.
                   </div>

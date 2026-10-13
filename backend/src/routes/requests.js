@@ -55,6 +55,13 @@ router.post('/', requireAuth, async (req, res, next) => {
       });
     }
 
+    if (origin_station.trim().toLowerCase() === destination_station.trim().toLowerCase()) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Origin station and destination station cannot be identical.'
+      });
+    }
+
     if (flexibility_note && flexibility_note.length > 300) {
       return res.status(400).json({
         error: 'ValidationError',

@@ -6,6 +6,7 @@ import requestsRouter from './routes/requests.js';
 import proposalsRouter from './routes/proposals.js';
 import commitmentsRouter from './routes/commitments.js';
 import assistanceRouter from './routes/assistance.js';
+import railwayRouter from './routes/railway.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -58,6 +59,7 @@ export function createApp() {
   app.use('/api/proposals', proposalsRouter);
   app.use('/api/commitments', commitmentsRouter);
   app.use('/api/assistance', assistanceRouter);
+  app.use('/api/railway', railwayRouter);
 
   // Catch-all for undefined routes
   app.use((req, res) => {

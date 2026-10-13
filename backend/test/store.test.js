@@ -26,12 +26,14 @@ test('Database Adapter: checkDatabaseHealth reports honest diagnostic status', a
   }
 });
 
+import crypto from 'node:crypto';
+
 test('Database Adapter: Core CRUD operations in datastore', async () => {
-  // Ensure we test the robust store operations
-  const testUserId = `test-user-${Date.now()}`;
+  // Ensure we test the robust store operations with valid UUID matching schema
+  const testUserId = crypto.randomUUID();
   const profile = await store.createOrUpdateUser({
     id: testUserId,
-    email: `${testUserId}@example.com`,
+    email: `test-user-${Date.now()}@example.com`,
     display_name: 'Test Passenger',
     wallet_address: '0x1234567890123456789012345678901234567890'
   });

@@ -26,12 +26,25 @@ export function AuthProvider({ children }) {
       const storedId = api.getUserId();
       let active = usersList.find((u) => u.id === storedId);
 
+      if (!active && storedId) {
+        // Fallback match by demo persona alias or name
+        active = usersList.find((u) => {
+          const sid = String(storedId).toLowerCase();
+          const name = (u.display_name || '').toLowerCase();
+          return (
+            (sid.includes('priya') && name.includes('priya')) ||
+            (sid.includes('rahul') && name.includes('rahul')) ||
+            (sid.includes('ananya') && name.includes('ananya'))
+          );
+        });
+      }
+
       if (!active && usersList.length > 0) {
         active = usersList[0];
-        api.setUserId(active.id);
       }
 
       if (active) {
+        api.setUserId(active.id);
         setCurrentUser(active);
       } else {
         // Fallback default

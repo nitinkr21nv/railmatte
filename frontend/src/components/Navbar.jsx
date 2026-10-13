@@ -126,7 +126,11 @@ export default function Navbar() {
                           <div>
                             <div className="font-medium text-slate-900">{u.display_name}</div>
                             <div className="text-[10px] text-slate-400 truncate">
-                              {u.id === 'user-priya-001' ? 'Holds B3-42 (Upper) • Wants Lower' : u.id === 'user-rahul-002' ? 'Holds B3-19 (Lower) • Wants Upper' : 'Holds C2-14 (Aisle) • Wants Window'}
+                              {u.display_name?.toLowerCase().includes('priya')
+                                ? 'Holds B3-42 (Upper) • Wants Lower'
+                                : u.display_name?.toLowerCase().includes('rahul')
+                                ? 'Holds B3-19 (Lower) • Wants Upper'
+                                : 'Holds C2-14 (Aisle) • Wants Window'}
                             </div>
                           </div>
                           {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0 ml-2" />}
@@ -238,7 +242,11 @@ export default function Navbar() {
                     <div className="text-left">
                       <div>{u.display_name}</div>
                       <div className="text-[10px] text-slate-400">
-                        {u.id === 'user-priya-001' ? 'Coach B3-42 (Upper)' : u.id === 'user-rahul-002' ? 'Coach B3-19 (Lower)' : 'Coach C2-14 (Aisle)'}
+                        {u.display_name?.toLowerCase().includes('priya')
+                          ? 'Coach B3-42 (Upper)'
+                          : u.display_name?.toLowerCase().includes('rahul')
+                          ? 'Coach B3-19 (Lower)'
+                          : 'Coach C2-14 (Aisle)'}
                       </div>
                     </div>
                     {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0" />}

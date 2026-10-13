@@ -17,8 +17,10 @@ import {
   Sparkles,
   ChevronRight,
   ShieldCheck,
-  Info
+  Info,
+  RotateCcw
 } from 'lucide-react';
+import { searchStations, searchTrains, formatStationLabel } from '../data/railwayDirectory';
 
 const BERTH_OPTIONS = ['Lower', 'Middle', 'Upper', 'Side Lower', 'Side Upper', 'Window', 'Aisle'];
 const CLASS_OPTIONS = ['3A', '2A', '1A', 'SL', 'CC', 'EC', '2S'];
@@ -30,9 +32,18 @@ export default function SeatExchangePage() {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('');
   const [filterDate, setFilterDate] = useState('');
+
+  // Station and Train Autocomplete Suggestions State
+  const [originSuggestions, setOriginSuggestions] = useState([]);
+  const [destSuggestions, setDestSuggestions] = useState([]);
+  const [trainSuggestions, setTrainSuggestions] = useState([]);
+  const [showOriginDropdown, setShowOriginDropdown] = useState(false);
+  const [showDestDropdown, setShowDestDropdown] = useState(false);
+  const [showTrainDropdown, setShowTrainDropdown] = useState(false);
 
   // Create Request Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -63,14 +74,67 @@ export default function SeatExchangePage() {
   const loadRequests = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await api.getRequests();
       setRequests(res.requests || []);
     } catch (err) {
       console.error('Failed to load exchange requests:', err);
+      setLoadError(err.message || 'Unable to connect to the backend server.');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setFilterClass('');
+    setFilterDate('');
+  };
+
+  const hasActiveFilters = Boolean(searchQuery.trim() || filterClass || filterDate);
+
+  const handleOriginChange = (val) => {
+    setFormData((prev) => ({ ...prev, origin_station: val }));
+    const matches = searchStations(val);
+    setOriginSuggestions(matches);
+    setShowOriginDropdown(matches.length > 0);
+  };
+
+  const handleSelectOrigin = (st) => {
+    setFormData((prev) => ({ ...prev, origin_station: formatStationLabel(st) }));
+    setShowOriginDropdown(false);
+  };
+
+  const handleDestChange = (val) => {
+    setFormData((prev) => ({ ...prev, destination_station: val }));
+    const matches = searchStations(val);
+    setDestSuggestions(matches);
+    setShowDestDropdown(matches.length > 0);
+  };
+
+  const handleSelectDest = (st) => {
+    setFormData((prev) => ({ ...prev, destination_station: formatStationLabel(st) }));
+    setShowDestDropdown(false);
+  };
+
+  const handleTrainChange = (val) => {
+    setFormData((prev) => ({ ...prev, train_number: val }));
+    const matches = searchTrains(val);
+    setTrainSuggestions(matches);
+    setShowTrainDropdown(matches.length > 0);
+  };
+
+  const handleSelectTrain = (t) => {
+    setFormData((prev) => ({
+      ...prev,
+      train_number: t.number,
+      train_name: t.name,
+      origin_station: prev.origin_station || t.origin,
+      destination_station: prev.destination_station || t.destination,
+      coach_class: (t.classes && t.classes.length > 0 && !t.classes.includes(prev.coach_class)) ? t.classes[0] : prev.coach_class
+    }));
+    setShowTrainDropdown(false);
+  };
 
   useEffect(() => {
     loadRequests();
@@ -103,11 +167,15 @@ export default function SeatExchangePage() {
     e.preventDefault();
     setFormError(null);
 
-    if (!formData.origin_station || !formData.destination_station) {
+    if (!formData.origin_station.trim() || !formData.destination_station.trim()) {
       setFormError('Please specify both origin and destination stations.');
       return;
     }
-    if (!formData.current_coach || !formData.current_seat) {
+    if (formData.origin_station.trim().toLowerCase() === formData.destination_station.trim().toLowerCase()) {
+      setFormError('Origin and destination stations cannot be identical.');
+      return;
+    }
+    if (!formData.current_coach.trim() || !formData.current_seat.trim()) {
       setFormError('Please specify current coach and seat number.');
       return;
     }
@@ -163,12 +231,12 @@ export default function SeatExchangePage() {
 
   // Filtered requests
   const filteredRequests = requests.filter((r) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
-      r.origin_station.toLowerCase().includes(q) ||
-      r.destination_station.toLowerCase().includes(q) ||
-      (r.train_number && r.train_number.toLowerCase().includes(q)) ||
+      r.origin_station?.toLowerCase().includes(q) ||
+      r.destination_station?.toLowerCase().includes(q) ||
+      (r.train_number && String(r.train_number).toLowerCase().includes(q)) ||
       (r.train_name && r.train_name.toLowerCase().includes(q));
 
     const matchesClass = !filterClass || r.coach_class === filterClass;
@@ -202,54 +270,138 @@ export default function SeatExchangePage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Search stations or train..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
-          />
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <input
+              type="text"
+              placeholder="Search station, code, or train (e.g. NDLS, Rajdhani)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+            <select
+              value={filterClass}
+              onChange={(e) => setFilterClass(e.target.value)}
+              className="w-full py-2 px-3 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white"
+            >
+              <option value="">All Travel Classes</option>
+              {CLASS_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c} Class</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full py-2 px-3 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-          <select
-            value={filterClass}
-            onChange={(e) => setFilterClass(e.target.value)}
-            className="w-full py-2 px-3 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white"
-          >
-            <option value="">All Travel Classes</option>
-            {CLASS_OPTIONS.map((c) => (
-              <option key={c} value={c}>{c} Class</option>
-            ))}
-          </select>
-        </div>
+        {/* Active Filters Bar with Clear Button */}
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Active Filters:</span>
+              {searchQuery && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 text-[11px]">
+                  Keyword: &ldquo;{searchQuery}&rdquo;
+                  <button type="button" onClick={() => setSearchQuery('')} className="hover:text-teal-950">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filterClass && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 text-[11px]">
+                  Class: {filterClass}
+                  <button type="button" onClick={() => setFilterClass('')} className="hover:text-teal-950">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filterDate && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 text-[11px]">
+                  Date: {filterDate}
+                  <button type="button" onClick={() => setFilterDate('')} className="hover:text-teal-950">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
 
-        <div>
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="w-full py-2 px-3 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none bg-white"
-          />
-        </div>
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline shrink-0"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Clear Filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Requests Grid */}
       {loading ? (
-        <div className="py-16 text-center text-slate-500 text-xs">Loading requests...</div>
+        <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center space-y-2">
+          <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+          <span>Loading exchange requests...</span>
+        </div>
+      ) : loadError ? (
+        <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <h3 className="text-sm font-semibold text-slate-800">Failed to load exchange requests</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">{loadError}</p>
+          <button
+            type="button"
+            onClick={loadRequests}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors mx-auto"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
       ) : filteredRequests.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
           <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
             <Search className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">No matching requests found</h3>
+          <h3 className="text-sm font-semibold text-slate-800">
+            {hasActiveFilters ? 'No matching requests found' : 'No exchange requests yet'}
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try adjusting your search filters, or create a new request for your journey.
+            {hasActiveFilters
+              ? 'No requests match your current search criteria. Clear filters to see all available requests.'
+              : 'Be the first to publish a voluntary seat exchange request for your journey.'}
           </p>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-500 transition-colors mx-auto"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Clear All Filters
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-500 transition-colors mx-auto"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Create Seat Request
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -348,6 +500,24 @@ export default function SeatExchangePage() {
         </div>
       )}
 
+      {/* Official Railway Reference Information Banner */}
+      <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-slate-800">
+              Verified Indian Railways Reference Directory (Scheduled Reference Data)
+            </div>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              Stations and train routes reflect official scheduled reference data from the published Indian Railways network directory (IRCTC/CRIS). Real-time GPS running tracking, delays, and official reservation charts are managed exclusively by Indian Railways on board.
+            </p>
+          </div>
+        </div>
+        <div className="text-[11px] text-teal-700 bg-teal-50 border border-teal-200/80 px-2.5 py-1 rounded-lg shrink-0 font-medium">
+          Reference Timetables
+        </div>
+      </div>
+
       {/* CREATE REQUEST MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -403,51 +573,130 @@ export default function SeatExchangePage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className="relative">
                   <label className="block font-medium text-slate-700 mb-1">Origin Station *</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. New Delhi (NDLS)"
+                    placeholder="Search e.g. NDLS or New Delhi"
                     value={formData.origin_station}
-                    onChange={(e) => setFormData({ ...formData, origin_station: e.target.value })}
+                    onChange={(e) => handleOriginChange(e.target.value)}
+                    onFocus={() => {
+                      if (originSuggestions.length > 0) setShowOriginDropdown(true);
+                    }}
                     className="w-full p-2.5 border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
                   />
+                  {showOriginDropdown && originSuggestions.length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-xs">
+                      {originSuggestions.map((st) => (
+                        <button
+                          key={st.code}
+                          type="button"
+                          onClick={() => handleSelectOrigin(st)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-teal-50 hover:text-teal-900 flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <span className="font-semibold text-slate-900">{st.name}</span>
+                            <span className="text-slate-400 text-[10px] ml-1.5">{st.city}, {st.state}</span>
+                          </div>
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                            {st.code}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
+
+                <div className="relative">
                   <label className="block font-medium text-slate-700 mb-1">Destination Station *</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Mumbai Central (MMCT)"
+                    placeholder="Search e.g. MMCT or Mumbai Central"
                     value={formData.destination_station}
-                    onChange={(e) => setFormData({ ...formData, destination_station: e.target.value })}
+                    onChange={(e) => handleDestChange(e.target.value)}
+                    onFocus={() => {
+                      if (destSuggestions.length > 0) setShowDestDropdown(true);
+                    }}
                     className="w-full p-2.5 border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
                   />
+                  {showDestDropdown && destSuggestions.length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-xs">
+                      {destSuggestions.map((st) => (
+                        <button
+                          key={st.code}
+                          type="button"
+                          onClick={() => handleSelectDest(st)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-teal-50 hover:text-teal-900 flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <span className="font-semibold text-slate-900">{st.name}</span>
+                            <span className="text-slate-400 text-[10px] ml-1.5">{st.city}, {st.state}</span>
+                          </div>
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                            {st.code}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className="relative">
                   <label className="block font-medium text-slate-700 mb-1">Train Number (Optional)</label>
                   <input
                     type="text"
-                    placeholder="e.g. 12952"
+                    placeholder="Search e.g. 12952 or 12028"
                     value={formData.train_number}
-                    onChange={(e) => setFormData({ ...formData, train_number: e.target.value })}
+                    onChange={(e) => handleTrainChange(e.target.value)}
+                    onFocus={() => {
+                      if (trainSuggestions.length > 0) setShowTrainDropdown(true);
+                    }}
                     className="w-full p-2.5 border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
                   />
+                  {showTrainDropdown && trainSuggestions.length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 max-h-44 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-xs">
+                      {trainSuggestions.map((t) => (
+                        <button
+                          key={t.number}
+                          type="button"
+                          onClick={() => handleSelectTrain(t)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-teal-50 hover:text-teal-900 flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <span className="font-semibold text-slate-900">{t.number}</span>
+                            <span className="text-slate-600 text-[11px] ml-1.5">{t.name}</span>
+                          </div>
+                          <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">
+                            {t.type}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">Train Name (Optional)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Rajdhani Express"
+                    placeholder="e.g. Mumbai Rajdhani Express"
                     value={formData.train_name}
                     onChange={(e) => setFormData({ ...formData, train_name: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-lg focus:border-teal-500 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Scheduled Reference Disclosure */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 flex items-start gap-2">
+                <Info className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Scheduled Reference Data:</strong> Station codes and train routes reflect official Indian Railways national network reference schedules (IRCTC/CRIS). Real-time GPS running tracking and official reservation charts are managed exclusively by Indian Railways.
+                </span>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">

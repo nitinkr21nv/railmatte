@@ -111,112 +111,122 @@ export function getDatabaseStatus() {
 export function setOperationalState(state) {
   isOperational = Boolean(state);
   isSupabaseLive = Boolean(state);
+  if (lastHealthCheck) {
+    lastHealthCheck.operational = Boolean(state);
+    lastHealthCheck.mode = Boolean(state) ? 'supabase' : 'memory_fallback';
+  }
 }
 
 // ============================================================================
-// IN-MEMORY DATA STORE (Zero-friction local dev & test fallback)
+// DEMO PERSONAS & DEFAULT SEED DATA
+// Standardized on valid, stable UUIDs matching the database schema
 // ============================================================================
+export const DEMO_PROFILES = [
+  {
+    id: '11b04fa3-05e6-56cd-928d-b85bba1fdffb',
+    email: 'priya.sharma@example.com',
+    display_name: 'Priya Sharma',
+    wallet_address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
+  },
+  {
+    id: '97f820b1-0ce8-5f55-8429-75e194edc998',
+    email: 'rahul.verma@example.com',
+    display_name: 'Rahul Verma',
+    wallet_address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
+  },
+  {
+    id: '2f0e6ff6-5cd0-5be8-b051-9a40c22d2b7d',
+    email: 'ananya.iyer@example.com',
+    display_name: 'Ananya Iyer',
+    wallet_address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
+    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 1).toISOString()
+  }
+];
+
+export const DEMO_REQUESTS = [
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    user_id: '11b04fa3-05e6-56cd-928d-b85bba1fdffb',
+    travel_date: '2026-10-20',
+    origin_station: 'New Delhi (NDLS)',
+    destination_station: 'Mumbai Central (MMCT)',
+    train_number: '12952',
+    train_name: 'Mumbai Rajdhani Express',
+    current_coach: 'B3',
+    current_seat: '42',
+    current_berth_type: 'Upper',
+    desired_berth_type: 'Lower',
+    coach_class: '3A',
+    flexibility_note: 'Traveling with elderly parent, desperately need a lower berth if possible.',
+    status: 'OPEN',
+    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 12).toISOString()
+  },
+  {
+    id: '22222222-2222-4222-8222-222222222222',
+    user_id: '97f820b1-0ce8-5f55-8429-75e194edc998',
+    travel_date: '2026-10-20',
+    origin_station: 'New Delhi (NDLS)',
+    destination_station: 'Mumbai Central (MMCT)',
+    train_number: '12952',
+    train_name: 'Mumbai Rajdhani Express',
+    current_coach: 'B3',
+    current_seat: '19',
+    current_berth_type: 'Lower',
+    desired_berth_type: 'Upper',
+    coach_class: '3A',
+    flexibility_note: 'Happy to take upper berth to work quietly on laptop without daytime seating disturbance.',
+    status: 'OPEN',
+    created_at: new Date(Date.now() - 3600000 * 8).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 8).toISOString()
+  },
+  {
+    id: '33333333-3333-4333-8333-333333333333',
+    user_id: '2f0e6ff6-5cd0-5be8-b051-9a40c22d2b7d',
+    travel_date: '2026-10-22',
+    origin_station: 'Bengaluru City (SBC)',
+    destination_station: 'Chennai Central (MAS)',
+    train_number: '12028',
+    train_name: 'KSR Bengaluru - MGR Chennai Central Shatabdi Express',
+    current_coach: 'C2',
+    current_seat: '14',
+    current_berth_type: 'Aisle',
+    desired_berth_type: 'Window',
+    coach_class: 'CC',
+    flexibility_note: 'Prefer window seat for working with natural light.',
+    status: 'OPEN',
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 4).toISOString()
+  }
+];
+
+// In-Memory store fallback supporting both UUID and alias lookups
 export const memoryStore = {
   profiles: new Map([
-    [
-      'user-priya-001',
-      {
-        id: 'user-priya-001',
-        email: 'priya.sharma@example.com',
-        display_name: 'Priya Sharma',
-        wallet_address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-        created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-        updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
-      }
-    ],
-    [
-      'user-rahul-002',
-      {
-        id: 'user-rahul-002',
-        email: 'rahul.verma@example.com',
-        display_name: 'Rahul Verma',
-        wallet_address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-        created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-        updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
-      }
-    ],
-    [
-      'user-ananya-003',
-      {
-        id: 'user-ananya-003',
-        email: 'ananya.iyer@example.com',
-        display_name: 'Ananya Iyer',
-        wallet_address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-        created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-        updated_at: new Date(Date.now() - 86400000 * 1).toISOString()
-      }
-    ]
+    // UUID keys
+    [DEMO_PROFILES[0].id, { ...DEMO_PROFILES[0] }],
+    [DEMO_PROFILES[1].id, { ...DEMO_PROFILES[1] }],
+    [DEMO_PROFILES[2].id, { ...DEMO_PROFILES[2] }],
+    // Legacy string alias keys
+    ['user-priya-001', { ...DEMO_PROFILES[0] }],
+    ['user-rahul-002', { ...DEMO_PROFILES[1] }],
+    ['user-ananya-003', { ...DEMO_PROFILES[2] }]
   ]),
 
   requests: new Map([
-    [
-      'req-priya-101',
-      {
-        id: 'req-priya-101',
-        user_id: 'user-priya-001',
-        travel_date: '2026-10-20',
-        origin_station: 'New Delhi (NDLS)',
-        destination_station: 'Mumbai Central (MMCT)',
-        train_number: '12952',
-        train_name: 'Mumbai Rajdhani Express',
-        current_coach: 'B3',
-        current_seat: '42',
-        current_berth_type: 'Upper',
-        desired_berth_type: 'Lower',
-        coach_class: '3A',
-        flexibility_note: 'Traveling with elderly parent, desperately need a lower berth if possible.',
-        status: 'OPEN',
-        created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-        updated_at: new Date(Date.now() - 3600000 * 12).toISOString()
-      }
-    ],
-    [
-      'req-rahul-102',
-      {
-        id: 'req-rahul-102',
-        user_id: 'user-rahul-002',
-        travel_date: '2026-10-20',
-        origin_station: 'New Delhi (NDLS)',
-        destination_station: 'Mumbai Central (MMCT)',
-        train_number: '12952',
-        train_name: 'Mumbai Rajdhani Express',
-        current_coach: 'B3',
-        current_seat: '19',
-        current_berth_type: 'Lower',
-        desired_berth_type: 'Upper',
-        coach_class: '3A',
-        flexibility_note: 'Happy to take upper berth to work quietly on laptop without daytime seating disturbance.',
-        status: 'OPEN',
-        created_at: new Date(Date.now() - 3600000 * 8).toISOString(),
-        updated_at: new Date(Date.now() - 3600000 * 8).toISOString()
-      }
-    ],
-    [
-      'req-ananya-103',
-      {
-        id: 'req-ananya-103',
-        user_id: 'user-ananya-003',
-        travel_date: '2026-10-22',
-        origin_station: 'Bengaluru (SBC)',
-        destination_station: 'Chennai Central (MAS)',
-        train_number: '12028',
-        train_name: 'Shatabdi Express',
-        current_coach: 'C2',
-        current_seat: '14',
-        current_berth_type: 'Aisle',
-        desired_berth_type: 'Window',
-        coach_class: 'CC',
-        flexibility_note: 'Prefer window seat for working with natural light.',
-        status: 'OPEN',
-        created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-        updated_at: new Date(Date.now() - 3600000 * 4).toISOString()
-      }
-    ]
+    // UUID keys
+    [DEMO_REQUESTS[0].id, { ...DEMO_REQUESTS[0] }],
+    [DEMO_REQUESTS[1].id, { ...DEMO_REQUESTS[1] }],
+    [DEMO_REQUESTS[2].id, { ...DEMO_REQUESTS[2] }],
+    // Legacy string alias keys
+    ['req-priya-101', { ...DEMO_REQUESTS[0] }],
+    ['req-rahul-102', { ...DEMO_REQUESTS[1] }],
+    ['req-ananya-103', { ...DEMO_REQUESTS[2] }]
   ]),
 
   proposals: new Map(),
@@ -224,18 +234,29 @@ export const memoryStore = {
   assistanceReports: new Map()
 };
 
-// Auto-seed helper for freshly granted Supabase tables
-async function seedDefaultDataIfEmpty() {
+// Auto-seed helper for Supabase tables
+export async function seedDefaultDataIfEmpty() {
   if (!isOperational || !supabase) return;
 
   try {
-    const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-    if (count === 0) {
-      const demoUsers = Array.from(memoryStore.profiles.values());
-      await supabase.from('profiles').insert(demoUsers);
+    // 1. Ensure all 3 demo profiles exist via safe upsert
+    await supabase.from('profiles').upsert(
+      DEMO_PROFILES.map((p) => ({
+        id: p.id,
+        email: p.email,
+        display_name: p.display_name,
+        wallet_address: p.wallet_address
+      })),
+      { onConflict: 'id' }
+    );
 
-      const demoRequests = Array.from(memoryStore.requests.values());
-      await supabase.from('exchange_requests').insert(demoRequests);
+    // 2. Check if requests are present; if 0 requests exist, seed the demo requests
+    const { count: reqCount } = await supabase
+      .from('exchange_requests')
+      .select('*', { count: 'exact', head: true });
+
+    if (reqCount === 0 || reqCount === null) {
+      await supabase.from('exchange_requests').upsert(DEMO_REQUESTS, { onConflict: 'id' });
     }
   } catch (err) {
     logDbError('seedDefaultDataIfEmpty', err);
@@ -263,19 +284,20 @@ export const store = {
 
   async getAllUsers() {
     if (isOperational && supabase) {
+      await seedDefaultDataIfEmpty();
       const { data, error } = await supabase.from('profiles').select('*');
       if (error) {
         logDbError('getAllUsers', error);
         throw new Error(`Database error listing users: ${error.message}`);
       }
-      if (!data || data.length === 0) {
-        await seedDefaultDataIfEmpty();
-        const { data: refetched } = await supabase.from('profiles').select('*');
-        return refetched || [];
-      }
-      return data;
+      return data || [];
     }
-    return Array.from(memoryStore.profiles.values());
+
+    const unique = new Map();
+    for (const u of memoryStore.profiles.values()) {
+      unique.set(u.id, u);
+    }
+    return Array.from(unique.values());
   },
 
   async createOrUpdateUser({ id, email, display_name, wallet_address }) {
@@ -305,6 +327,7 @@ export const store = {
   // --- EXCHANGE REQUESTS ---
   async getAllRequests({ status, userId } = {}) {
     if (isOperational && supabase) {
+      await seedDefaultDataIfEmpty();
       let query = supabase.from('exchange_requests').select('*, profiles(id, display_name, email)');
       if (status) query = query.eq('status', status);
       if (userId) query = query.eq('user_id', userId);
@@ -312,11 +335,6 @@ export const store = {
       if (error) {
         logDbError('getAllRequests', error);
         throw new Error(`Database error listing requests: ${error.message}`);
-      }
-      if ((!data || data.length === 0) && !status && !userId) {
-        await seedDefaultDataIfEmpty();
-        const { data: refetched } = await query;
-        return refetched || [];
       }
       return data || [];
     }
