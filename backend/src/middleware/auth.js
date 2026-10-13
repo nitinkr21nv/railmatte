@@ -1,43 +1,103 @@
+
+import { createHash } from 'node:crypto';
 import { store } from '../services/store.js';
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
- * Authentication Middleware
- * Resolves passenger identity via `x-user-id` header or session token.
- * Defaults to demo user in development if no header specified.
+ * Preserve real UUIDs and map demo persona IDs to stable UUIDs.
  */
-export async function requireAuth(req, res, next) {
-  const userId = req.headers['x-user-id'] || req.headers['authorization']?.replace('Bearer ', '');
+function normalizeUserId(id) {
+  if (UUID_REGEX.test(id)) return id;
 
-  if (!userId) {
-    return res.status(401).json({
-      error: 'AuthenticationRequired',
-      message: 'Missing passenger identification credentials (x-user-id header required)'
-    });
-  }
+  if (!/^user-[a-z0-9-]+$/i.test(id)) return null;
 
-  let user = await store.getUser(userId);
+  const chars = createHash('sha256')
+    .update(`railmatte-demo:${id}`)
+    .digest('hex')
+    .slice(0, 32)
+    .split('');
 
-  // If user does not exist yet, auto-provision profile if well-formatted id
-  if (!user) {
-    user = await store.createOrUpdateUser({
-      id: userId,
-      email: `${userId}@passenger.railmatte.local`,
-      display_name: `Passenger ${userId.slice(0, 6)}`
-    });
-  }
+  chars[12] = '5';
+  chars[16] = (
+    (parseInt(chars[16], 16) & 0x3) | 0x8
+  ).toString(16);
 
-  req.user = user;
-  next();
+  const hex = chars.join('');
+
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32)
+  ].join('-');
 }
 
-/**
- * Optional Auth Middleware
- * Populates req.user if header is present, but doesn't block request if missing.
- */
-export async function optionalAuth(req, res, next) {
-  const userId = req.headers['x-user-id'] || req.headers['authorization']?.replace('Bearer ', '');
-  if (userId) {
-    req.user = await store.getUser(userId);
+function getDisplayName(id) {
+  const match = id.match(/^user-([a-z]+)-/i);
+
+  return match
+    ? match[1][0].toUpperCase() + match[1].slice(1).toLowerCase()
+    : `Passenger ${id.slice(0, 6)}`;
+}
+
+export async function requireAuth(req, res, next) {
+  try {
+    const rawId =
+      req.headers['x-user-id'] ||
+      req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+
+    if (!rawId) {
+      return res.status(401).json({
+        error: 'AuthenticationRequired',
+        message: 'Missing passenger identification credentials'
+      });
+    }
+
+    const userId = normalizeUserId(rawId);
+
+    if (!userId) {
+      return res.status(400).json({
+        error: 'InvalidUserId',
+        message: 'Invalid passenger identification'
+      });
+    }
+
+    let user = await store.getUser(userId);
+
+    if (!user) {
+      user = await store.createOrUpdateUser({
+        id: userId,
+        email: `${userId}@passenger.railmatte.local`,
+        display_name: getDisplayName(rawId)
+      });
+    }
+
+    req.user = user;
+    return next();
+  } catch (error) {
+    return next(error);
   }
-  next();
+}
+
+export async function optionalAuth(req, res, next) {
+  try {
+    const rawId =
+      req.headers['x-user-id'] ||
+      req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+
+    if (rawId) {
+      const userId = normalizeUserId(rawId);
+
+      if (userId) {
+        req.user = await store.getUser(userId);
+      }
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 }
